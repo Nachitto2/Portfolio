@@ -1,0 +1,167 @@
+SELECT * from CovidDeaths
+where continent is not null
+order by 3,4
+
+SELECT * from CovidVaccinations
+where continent is not null
+order by 3,4
+
+SELECT location, date, total_cases, new_cases,total_deaths,population
+FROM CovidDeaths
+where continent is not null
+ORDER by 1,2
+
+--Looking at the total cases vs total deaths
+SELECT location, date, total_cases,total_deaths, round(CAST(total_deaths as REAL)/total_cases,6) *100 as DeathPercentage
+FROM CovidDeaths
+WHERE location = 'Argentina'
+and continent is not null
+ORDER by 1,2
+
+--Looking at the total cases vs population
+SELECT location, date, total_cases, population,
+round(CAST(total_cases as REAL)/population,6) *100 as PercentOfPopulationInfected
+FROM CovidDeaths
+WHERE location = 'Argentina' and continent is not null
+ORDER by 1,2
+
+
+
+--Countries with highest infection rates compared to population
+SELECT location, date, max(total_cases) as HighestInfectionCount, population,
+max(round(CAST(total_cases as REAL)/population,6)) *100 as PercentOfPopulationInfected
+FROM CovidDeaths
+where continent is not null
+group by location, population
+ORDER by PercentOfPopulationInfected desc
+
+
+
+--Showing Countries with Highest Death Count per Population
+--I had a problem here because total_death was a text type string so remember checking the type of the field
+SELECT location, cast(max(total_deaths)as int) as TotalDeathCount
+FROM CovidDeaths
+where continent is not null
+group by location
+ORDER by totalDeathCount desc
+
+
+
+--Looking at the continents with Highest death count
+SELECT location, CAST(max(total_deaths) AS INT) AS TotalDeathCount
+FROM CovidDeaths
+WHERE continent IS NULL
+GROUP by location
+ORDER BY TotalDeathCount DESC
+
+
+
+
+--GLOBAL NUMBERS
+SELECT date, sum(new_cases) as TotalCases, sum(new_deaths) as TotalDeaths,
+round(CAST(sum(new_deaths) as REAL)/sum(new_cases) ,6) * 100 as DeathPercentage
+FROM CovidDeaths
+--WHERE location = 'Argentina'
+WHERE continent is not null
+group by date
+ORDER by date asc
+--recordar que la fecha tiene que estar en formato int y tiene que ser yyyy/mm/dd o yyyy-mm-dd
+
+
+
+--GLOBAL NUMBERS
+SELECT date, sum(new_cases) as TotalCases, sum(new_deaths) as TotalDeaths,
+round(CAST(sum(new_deaths) as REAL)/sum(new_cases) ,6) * 100 as DeathPercentage
+FROM CovidDeaths
+--WHERE location = 'Argentina'
+WHERE continent is not null
+ORDER by date asc
+
+
+
+--looking at total population vs vaccination
+SELECT dea.continent, dea.location, dea.date, dea.population,
+vac.new_vaccinations, 
+--sums the new vaccinations grouped by location
+sum(vac.new_vaccinations) over (PARTITION by dea.location order by
+dea.location,dea.date) as CumulativeVaccinations
+from CovidDeaths dea
+JOIN CovidVaccinations vac
+   on dea.location = vac.location
+   and dea.date = vac.date
+WHERE dea.continent is not null
+order by 2,3
+
+
+
+--Use CTE
+with popsvac ( continent, location, date, population, new_vaccinations,
+CumulativeVaccinations)
+as
+(
+SELECT dea.continent, dea.location, dea.date, dea.population,
+vac.new_vaccinations, 
+--sums the new vaccinations grouped by location
+sum(vac.new_vaccinations) over (PARTITION by dea.location order by
+dea.location,dea.date) as CumulativeVaccinations
+from CovidDeaths dea
+JOIN CovidVaccinations vac
+   on dea.location = vac.location
+   and dea.date = vac.date
+WHERE dea.continent is not null
+)
+select * , (cast(CumulativeVaccinations as REAL)/Population)  * 100
+from popsvac
+
+
+
+
+--TEMP TABLE
+
+CREATE TABLE "PercentPopulationVaccinated"
+(
+"continent" TEXT,
+"location" TEXT,
+"date" INTEGER,
+"population" NUMERIC,
+"new_vaccinations" INTEGER,
+"CumulativeVaccinations" NUMERIC
+)
+SELECT dea.continent, dea.location, dea.date, dea.population,
+vac.new_vaccinations, 
+--sums the new vaccinations grouped by location
+sum(vac.new_vaccinations) over (PARTITION by dea.location order by
+dea.location,dea.date) as CumulativeVaccinations
+from CovidDeaths dea
+JOIN CovidVaccinations vac
+   on dea.location = vac.location
+   and dea.date = vac.date
+WHERE dea.continent is not null
+)
+select (cast(CumulativeVaccinations as REAL)/Population)  * 100
+from PercentPopulationVaccinated
+
+DROP TABLE IF EXISTS "PercentPopulationVaccinated";
+CREATE TABLE "PercentPopulationVaccinated"
+(
+"continent" TEXT,
+"location" TEXT,
+"date" INTEGER,
+"population" NUMERIC,
+"new_vaccinations" INTEGER,
+"CumulativeVaccinations" NUMERIC
+);
+
+INSERT INTO "PercentPopulationVaccinated"
+SELECT dea.continent, dea.location, dea.date, dea.population,
+vac.new_vaccinations, 
+--sums the new vaccinations grouped by location
+SUM(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location, dea.date) AS CumulativeVaccinations
+FROM CovidDeaths dea
+JOIN CovidVaccinations vac
+   ON dea.location = vac.location
+   AND dea.date = vac.date
+WHERE dea.continent IS NOT NULL;
+
+SELECT *, (CAST(CumulativeVaccinations AS REAL) / Population) * 100
+FROM PercentPopulationVaccinated;
